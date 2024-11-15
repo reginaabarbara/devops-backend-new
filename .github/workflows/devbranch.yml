@@ -48,15 +48,43 @@ jobs:
         run: |
           # Verificar se o arquivo docker-compose.yml está no diretório correto
           ls -l  # Liste os arquivos no diretório para depuração
-          docker-compose -f ./docker/docker-compose.yml up -d  # Ajuste o caminho conforme necessário
+          docker-compose -f ./docker-compose.yml up -d  # Ajuste o caminho conforme necessário
           sleep 30  # Aguarda 30 segundos para garantir que o backend esteja rodando
+
+      - name: Instalar JMeter
+        run: |
+          # Atualiza o sistema e instala as dependências necessárias
+          sudo apt-get update -y
+          sudo apt-get install -y openjdk-11-jdk wget unzip
+
+          # Baixar e extrair o Apache JMeter 5.6.3
+          wget https://downloads.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          tar -xvf apache-jmeter-5.6.3.tgz
+          
+          # Definir variáveis de ambiente para o JMeter
+          export JMETER_HOME=$(pwd)/apache-jmeter-5.6.3
+          export PATH=$JMETER_HOME/bin:$PATH
+          
+          # Garantir que o binário do JMeter tenha permissões de execução
+          chmod +x $JMETER_HOME/bin/jmeter
+          
+          # Comandos de depuração
+          echo "Verificando o estado do PATH:"
+          echo $PATH  # Verifica se o JMeter foi adicionado ao PATH
+          
+          echo "Verificando se o JMeter está acessível no PATH:"
+          which jmeter  # Verifica o caminho do comando jmeter
+
+          echo "Verificando a versão do JMeter:"
+          jmeter -v  # Exibe a versão do JMeter, se estiver instalado corretamente
 
       - name: Rodar testes JMeter
         run: |
           echo "Rodando o JMeter com o script ./helloworld2.jmx"
+          # Agora, passando JMETER_HOME corretamente para cada comando
           ${{ env.JMETER_HOME }}/bin/jmeter -n -t ./helloworld2.jmx -l ./test-results.jtl
         env:
-          JMETER_HOME: $(pwd)/apache-jmeter-5.6.3
+          JMETER_HOME: $(pwd)/apache-jmeter-5.6.3  # Passando a variável para a etapa
 
       - name: Verificar resultado dos testes JMeter
         run: |
@@ -66,7 +94,7 @@ jobs:
             echo "Testes JMeter falharam"
             exit 1
           fi
-
+          
       - name: Build da Imagem Docker
         run: |
           IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
