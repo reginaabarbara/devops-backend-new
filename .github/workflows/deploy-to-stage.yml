@@ -1,0 +1,54 @@
+name: Deploy to Stage
+
+on:
+  workflow_dispatch:  # Este evento permite a execução manual através do GitHub UI
+
+jobs:
+  promote_to_stage:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Verifica o código da branch `dev`
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      # 2. Baixar as últimas alterações da branch dev
+      - name: Fetch latest commits from dev
+        run: |
+          git fetch origin dev
+
+      # 3. Verifica se os testes JMeter passaram na branch dev antes de promover para stage
+      - name: Check if JMeter tests passed on dev
+        run: |
+          # Aqui, a verificação será realizada com base na saída do job da `dev`, que gerou os resultados dos testes.
+          # Para esse fluxo, consideramos que o arquivo de resultados `test-results.jtl` seja gerado e publicado.
+          
+          # Assumindo que na `dev` os resultados estão no arquivo `test-results.jtl`
+          # Verificar se há falhas no arquivo de resultados dos testes JMeter.
+          if grep -q "Failure" ./test-results.jtl; then
+            echo "Testes JMeter na branch dev falharam. Abortando o deploy."
+            exit 1
+          fi
+
+      # 4. Login no Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.USER }}
+          password: ${{ secrets.PASS }}
+
+      # 5. Deploy para Stage (Push da imagem Docker e Git)
+      - name: Deploy to Stage (Push to Docker and Git)
+        run: |
+          # Defina a tag da imagem com base no tempo atual e no commit
+          IMAGE_TAG="stage-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          
+          # Tag a imagem criada anteriormente com a tag 'stage'
+          docker tag myapp:$IMAGE_TAG ${{ secrets.USER }}/myapp:$IMAGE_TAG
+    
+          # Fazer o merge da branch `dev` na branch `stage`
+          git checkout stage
+          git merge dev
+          git push origin stage
+          
+          echo "Aplicação implantada com sucesso na branch Stage com a tag da imagem $IMAGE_TAG"
