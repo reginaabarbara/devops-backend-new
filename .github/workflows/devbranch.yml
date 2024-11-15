@@ -1,0 +1,79 @@
+name: Build e Teste na Branch dev
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out o código
+        uses: actions/checkout@v2
+
+      # Instalar Docker
+      - name: Instalar Docker e Docker Compose
+        run: |
+          # Remover pacotes antigos de Docker, caso existam
+          sudo apt-get remove -y docker docker-engine docker.io containerd runc
+
+          # Atualizar os pacotes do sistema
+          sudo apt-get update -y
+
+          # Instalar dependências necessárias
+          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
+          # Baixar e adicionar chave GPG do Docker
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+          # Adicionar o repositório estável do Docker
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+          # Atualizar o APT novamente e instalar Docker
+          sudo apt-get update -y
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+          # Instalar Docker Compose
+          sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+
+          # Verificar as versões instaladas
+          docker --version
+          docker-compose --version
+
+      # Iniciar o servidor com Docker Compose
+      - name: Subir o servidor da aplicação com Docker Compose
+        run: |
+          # Verificar se o arquivo docker-compose.yml está no diretório correto
+          ls -l  # Liste os arquivos no diretório para depuração
+          docker-compose -f ./docker/docker-compose.yml up -d  # Ajuste o caminho conforme necessário
+          sleep 30  # Aguarda 30 segundos para garantir que o backend esteja rodando
+
+      - name: Rodar testes JMeter
+        run: |
+          echo "Rodando o JMeter com o script ./helloworld2.jmx"
+          ${{ env.JMETER_HOME }}/bin/jmeter -n -t ./helloworld2.jmx -l ./test-results.jtl
+        env:
+          JMETER_HOME: $(pwd)/apache-jmeter-5.6.3
+
+      - name: Verificar resultado dos testes JMeter
+        run: |
+          echo "Mostrando as últimas linhas do arquivo de resultados do JMeter"
+          tail -n 10 ./test-results.jtl
+          if grep -q "Failure" ./test-results.jtl; then
+            echo "Testes JMeter falharam"
+            exit 1
+          fi
+
+      - name: Build da Imagem Docker
+        run: |
+          IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          docker build -t myapp:$IMAGE_TAG .
+          echo "Imagem docker criada com a tag $IMAGE_TAG"
+          
+      - name: Preparar Imagem para Docker Hub (sem push)
+        run: |
+          IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          echo "A imagem foi criada e está pronta para ser promovida para a branch stage e enviada para o Docker Hub."
