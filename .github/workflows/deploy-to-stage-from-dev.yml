@@ -1,4 +1,4 @@
-name: Deploy to Stage
+name: Deploy to Stage From Dev
 
 on:
   workflow_dispatch:  # Permite execução manual
@@ -14,44 +14,74 @@ jobs:
       - name: Fetch latest commits from dev
         run: |
           git fetch origin dev
+          # Buscar todas as branches, incluindo a stage
+          git fetch --all
 
       - name: Check if JMeter tests passed on dev
         run: |
           # Aqui você pode verificar se os testes passaram corretamente na branch dev
           # (por exemplo, se o commit foi marcado com sucesso em algum log ou tag)
           echo "Testes JMeter passaram na branch dev."
-          
-      - name: Extract Medatada
-        id: meta
-        uses: docker/metadata-action@v5.5.1
-        with:
-         images: reginaabarbara/devops-backend-new    
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2 
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2 
-        with:
-          username: ${{ secrets.USER }} 
-          password: ${{ secrets.PASS }}  
-
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v6.9.0
-        with:
-          build-args: |
-            MODE=${{ github.ref_name }}
-          push: true
-          context: .
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{  steps.meta.outputs.labels  }}
-      
-      - name: Fazer o merge da branch dev na branch stage
+      - name: Construir a imagem Docker
         run: |
-          git checkout stage
-          git merge dev
-          git push origin stage
+          # Defina a tag da imagem com base apenas no SHA do commit
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          
+          # Depuração: Verificar a variável IMAGE_TAG antes da construção
+          echo "Imagem tag gerada para a construção: $IMAGE_TAG"
+          
+          # Construir a imagem Docker com a tag definida
+          docker build -t reginaabarbara/devops-backend-new:$IMAGE_TAG .
+
+          # Verificar se a imagem foi criada corretamente
+          docker images | grep reginaabarbara/devops-backend-new
+          
+      - name: Verificar as imagens Docker disponíveis
+        run: |
+          echo "Listando todas as imagens Docker disponíveis:"
+          docker images
+
+      - name: Tag a imagem com a tag 'stage'
+        run: |
+          # Verifique se a variável IMAGE_TAG está configurada corretamente
+          echo "Imagem tag antes de taguear: $IMAGE_TAG"
+          
+          # Tag a imagem criada anteriormente com a tag 'stage'
+          docker tag reginaabarbara/devops-backend-new:$IMAGE_TAG ${{ secrets.DOCKER_USERNAME }}/devops-backend-new:$IMAGE_TAG
+
+          # Verificar se a tag foi aplicada corretamente
+          docker images | grep ${{ secrets.DOCKER_USERNAME }}/devops-backend-new
+
+      - name: Fazer o login no Docker Hub
+        run: |
+          # Fazer login no Docker Hub
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      - name: Enviar a imagem para o Docker Hub
+        run: |
+          # Verificar a imagem antes de enviar para o Docker Hub
+          echo "Enviando a imagem com a tag $IMAGE_TAG para o Docker Hub"
+          
+          # Enviar a imagem com a tag 'stage' para o Docker Hub
+          docker push ${{ secrets.DOCKER_USERNAME }}/devops-backend-new:$IMAGE_TAG
+          echo "Imagem enviada com sucesso para o Docker Hub."
+
+      - name: Verificar a existência da branch stage e fazer o merge
+        run: |
+          # Verificar se a branch 'stage' existe no repositório remoto
+          if git show-ref --verify --quiet refs/remotes/origin/stage; then
+            echo "A branch 'stage' existe, fazendo o merge."
+            git checkout stage
+            git merge dev
+            git push origin stage
+          else
+            echo "A branch 'stage' não existe, criando-a."
+            # Criar a branch 'stage' a partir de 'dev' se não existir
+            git checkout -b stage dev
+            git push origin stage
+          fi
 
       - name: Confirmar deploy para stage
         run: |
-          echo "Aplicação implantada com sucesso na branch Stage com a tag da imagem 
+          echo "Aplicação implantada com sucesso na branch Stage com a tag da imagem $IMAGE_TAG"
