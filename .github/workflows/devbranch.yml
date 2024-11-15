@@ -1,0 +1,44 @@
+name: Build e Teste na Branch dev
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out o código
+        uses: actions/checkout@v2
+
+      - name: Configurar JMeter
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-11-jdk
+          wget https://downloads.apache.org/jmeter/binaries/apache-jmeter-5.4.3.tgz
+          tar -xvf apache-jmeter-5.4.3.tgz
+          export JMETER_HOME=$(pwd)/apache-jmeter-5.4.3
+
+      - name: Rodar testes JMeter
+        run: |
+          $JMETER_HOME/bin/jmeter -n -t ./helloworld2.jmx -l ./test-results.jtl
+          
+      - name: Verificar resultado dos testes JMeter
+        run: |
+          tail -n 10 ./test-results.jtl
+          if grep -q "Failure" ./test-results.jtl; then
+            echo "Testes JMeter falharam"
+            exit 1
+          fi
+
+      - name: Build da Imagem Docker
+        run: |
+          IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          docker build -t myapp:$IMAGE_TAG .
+          echo "Imagem docker criada com a tag $IMAGE_TAG"
+          
+      - name: Preparar Imagem para Docker Hub (sem push)
+        run: |
+          IMAGE_TAG="dev-$(date +'%Y%m%d%H%M%S')-$(git rev-parse --short HEAD)"
+          echo "A imagem foi criada e está pronta para ser promovida para a branch stage e enviada para o Docker Hub."
