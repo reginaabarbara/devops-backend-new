@@ -16,9 +16,9 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y openjdk-11-jdk
-          wget https://downloads.apache.org/jmeter/binaries/apache-jmeter-5.4.3.tgz
-          tar -xvf apache-jmeter-5.4.3.tgz
-          export JMETER_HOME=$(pwd)/apache-jmeter-5.4.3
+          wget https://downloads.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          tar -xvf apache-jmeter-5.6.3.tgz
+          export JMETER_HOME=$(pwd)/apache-jmeter-5.6.3
 
       - name: Rodar testes JMeter
         run: |
