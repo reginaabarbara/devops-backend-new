@@ -102,7 +102,7 @@ jobs:
         with:
           repository: reginaabarbara/devops-backend-new
           path: devops-backend-new
-          token: ${{ secrets.TOKEN_PAT }}
+          token: ${{ secrets.deployment_pat }}
           ref: refs/heads/main
           
       - name: Update deployments repository
