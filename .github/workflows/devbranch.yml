@@ -3,7 +3,7 @@ name: Build e Teste na Branch dev
 on:
   push:
     branches:
-      - dev
+      - ialulu
 
 jobs:
   test_and_build:
