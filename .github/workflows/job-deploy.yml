@@ -30,7 +30,7 @@ on:
         default: "reginaabarbara"
         type: string
     secrets:
-      token_pat:
+      deployment_pat:
         required: true
       dockerhub_pwd:
         required: true
