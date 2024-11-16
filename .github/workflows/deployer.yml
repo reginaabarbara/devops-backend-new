@@ -1,0 +1,20 @@
+name: Deployer
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  deploy_brand:
+    uses: reginaabarbara/devops-backend-new/.github/workflows/job-deploy.yml@main
+    with:
+      app: devops-backend-new
+      production_branch: dev
+      repository: reginaabarbara/devops-backend-new
+      docker_args: |
+        mode=${{ github.ref_name }}
+    secrets:
+      deployment_pat: ${{ secrets.TOKEN_PAT }}
+      dockerhub_pwd: ${{ secrets.PASS }}
