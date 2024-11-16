@@ -1,0 +1,118 @@
+name: Build Test and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+      repository:
+        required: true
+        type: string
+      production_branch:
+        required: false
+        type: string
+        default: "stage"
+      docker_file:
+        required: false
+        default: "Dockerfile"
+        type: string
+      docker_context:
+        required: false
+        default: "."
+        type: string
+      docker_args:
+        required: false
+        default: ""
+        type: string
+      dockerhub_username:
+        required: false
+        default: "reginaabarbara"
+        type: string
+    secrets:
+      deployment_pat:
+        required: true
+      dockerhub_pwd:
+        required: true
+
+jobs:
+  testing:
+  uses: reginaabarbara/devops-backend-new/.github/workflows/testing.yml@main
+  
+  build:
+    runs-on: ubuntu-latest
+	needs: [testing]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get branch name
+        id: branch
+        uses: tj-actions/branch-names@v6
+
+      - name: Extract Medatada
+        id: meta
+        uses: docker/metadata-action@v5.5.1
+        with:
+          images: reginaabarbara/react_dev
+
+      - name: Docker - Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Docker - Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker Login
+        uses: docker/login-action@v3.3.0
+        with:
+          username: ${{ inputs.dockerhub_username  }}
+          password: ${{ secrets.PASS  }}
+          
+      - name: Docker - Build image and push to DockerHub
+        uses: docker/build-push-action@v2
+        with:
+          context: ${{ inputs.docker_context }}
+          file: ${{ inputs.docker_file }}
+          push: true
+          build-args: ${{ inputs.docker_args }}
+          tags: ${{ inputs.repository }}:${{ github.sha }}
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: main
+
+      - name: Get branch name
+        id: branch
+        uses: tj-actions/branch-names@v6
+
+      - name: Define env (production)
+        if: steps.branch.outputs.current_branch == inputs.production_branch
+        run: |
+          echo "ENVIRONMENT=production" >> $GITHUB_ENV
+
+      - name: Define env (other environments)
+        if: steps.branch.outputs.current_branch != inputs.production_branch
+        run: |
+          echo "ENVIRONMENT=${{ steps.branch.outputs.current_branch }}" >> $GITHUB_ENV
+
+      - name: Prepare deployments repository
+        uses: actions/checkout@v3
+        with:
+          repository: reginaabarbara/devops-backend-new
+          path: devops-backend-new
+          token: ${{ secrets.TOKEN_PAT }}
+          ref: refs/heads/main
+
+     
+      - name: Update deployments repository
+        run: |
+          cd deployment
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git fetch
+          git pull origin stage --ff-only
+          git add --all
+          git commit -m "Update image tag to ${{ inputs.app }}:${{ env.ENVIRONMENT }}"
+          git push
