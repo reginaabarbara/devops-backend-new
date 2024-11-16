@@ -1,0 +1,94 @@
+name: Application Test
+
+on:
+  workflow_call:
+
+jobs:
+  aplicattion_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out o código
+        uses: actions/checkout@v2
+
+      # Instalar Docker
+      - name: Instalar Docker e Docker Compose
+        run: |
+          # Remover pacotes antigos de Docker, caso existam
+          sudo apt-get remove -y docker docker-engine docker.io containerd runc
+
+          # Atualizar os pacotes do sistema
+          sudo apt-get update -y
+
+          # Instalar dependências necessárias
+          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
+          # Baixar e adicionar chave GPG do Docker
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+          # Adicionar o repositório estável do Docker
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+          # Atualizar o APT novamente e instalar Docker
+          sudo apt-get update -y
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+          # Instalar Docker Compose
+          sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+
+          # Verificar as versões instaladas
+          docker --version
+          docker-compose --version
+
+      # Iniciar o servidor com Docker Compose
+      - name: Subir o servidor da aplicação com Docker Compose
+        run: |
+          # Verificar se o arquivo docker-compose.yml está no diretório correto
+          ls -l  # Liste os arquivos no diretório para depuração
+          docker-compose -f ./docker-compose.yml up -d  # Ajuste o caminho conforme necessário
+          sleep 30  # Aguarda 30 segundos para garantir que o backend esteja rodando
+
+      - name: Instalar JMeter
+        run: |
+          # Atualiza o sistema e instala as dependências necessárias
+          sudo apt-get update -y
+          sudo apt-get install -y openjdk-11-jdk wget unzip
+
+          # Baixar e extrair o Apache JMeter 5.6.3
+          wget https://downloads.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          tar -xvf apache-jmeter-5.6.3.tgz
+          
+          # Definir variáveis de ambiente para o JMeter
+          export JMETER_HOME=$(pwd)/apache-jmeter-5.6.3
+          export PATH=$JMETER_HOME/bin:$PATH
+          
+          # Garantir que o binário do JMeter tenha permissões de execução
+          chmod +x $JMETER_HOME/bin/jmeter
+          
+          # Comandos de depuração
+          echo "Verificando o estado do PATH:"
+          echo $PATH  # Verifica se o JMeter foi adicionado ao PATH
+          
+          echo "Verificando se o JMeter está acessível no PATH:"
+          which jmeter  # Verifica o caminho do comando jmeter
+
+          echo "Verificando a versão do JMeter:"
+          jmeter -v  # Exibe a versão do JMeter, se estiver instalado corretamente
+
+      - name: Rodar testes JMeter
+        run: |
+          echo "Rodando o JMeter com o script ./helloworld2.jmx"
+          # Agora, passando JMETER_HOME corretamente para cada comando
+          ${{ env.JMETER_HOME }}/bin/jmeter -n -t ./helloworld2.jmx -l ./test-results.jtl
+        env:
+          JMETER_HOME: $(pwd)/apache-jmeter-5.6.3  # Passando a variável para a etapa
+
+      - name: Verificar resultado dos testes JMeter
+        run: |
+          echo "Mostrando as últimas linhas do arquivo de resultados do JMeter"
+          tail -n 10 ./test-results.jtl
+          if grep -q "Failure" ./test-results.jtl; then
+            echo "Testes JMeter falharam"
+            exit 1
+          fi
